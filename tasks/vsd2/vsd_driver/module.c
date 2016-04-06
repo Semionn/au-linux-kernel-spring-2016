@@ -109,7 +109,7 @@ static long vsd_ioctl_get_size(vsd_ioctl_get_size_arg_t __user *uarg)
 static long vsd_ioctl_set_size(vsd_ioctl_set_size_arg_t __user *uarg)
 {
     vsd_ioctl_set_size_arg_t arg;
-    if (0/* TODO device is currently mapped */)
+    if (vsd_dev->mmap_count > 0)
         return -EBUSY;
 
     if (copy_from_user(&arg, uarg, sizeof(arg)))
@@ -160,15 +160,16 @@ static int map_vmalloc_range(struct vm_area_struct *uvma, void *kaddr, size_t si
             || !PAGE_ALIGNED(size))
         return -EINVAL;
 
-    /* 
-     * Remember that all the work with memory is done using pages.
-     * PAGE_SIZE is minimal size of memory we can map/unmap
-     * anywhere.
-     * Note that vmalloced VSD address range is not physically
-     * continuous. So we need to map each vmalloced page separetely.
-     * Use vmalloc_to_page and vm_insert_page functions for this.
-     */
-    // TODO
+    while (size > 0)
+    {
+        struct page* cur_page = vmalloc_to_page(kaddr);
+        int ret_code = vm_insert_page(uvma, uaddr, cur_page);
+        if (ret_code)
+            return ret_code;
+        kaddr += PAGE_SIZE;
+        uaddr += PAGE_SIZE;
+        size -= PAGE_SIZE;
+    }
 
     uvma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
     return 0;
@@ -291,3 +292,4 @@ module_exit(vsd_driver_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("AU Virtual Storage Device driver module");
 MODULE_AUTHOR("Kernel hacker!");
+
